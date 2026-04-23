@@ -23,3 +23,11 @@
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
+
+## 対応形式
+- wav
+- m4a（iPhoneボイスメモ対応）
+
+## 注意
+- m4a は内部で wav に変換してから解析します
+- 録音環境によってピッチ検出の精度は変わることがあります
