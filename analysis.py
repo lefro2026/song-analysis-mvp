@@ -9,6 +9,7 @@ from utils import hz_to_note_name, build_comment
 
 
 HIGH_PITCH_THRESHOLD_NOTE = "A4"
+MAX_DURATION_SEC = 5 * 60  # 5分まで
 
 
 def build_adaptive_pitch_ticks(valid_f0: np.ndarray):
@@ -38,7 +39,6 @@ def load_audio_from_uploaded_file(uploaded_file):
     output_path = os.path.join(temp_dir, "converted.wav")
 
     try:
-        # アップロードファイルを保存
         with open(input_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
@@ -59,6 +59,11 @@ def load_audio_from_uploaded_file(uploaded_file):
             pass
 
 
+def trim_silence(y, top_db=25):
+    y_trimmed, _ = librosa.effects.trim(y, top_db=top_db)
+    return y_trimmed
+
+
 def analyze_audio_file(uploaded_file):
     y, sr = load_audio_from_uploaded_file(uploaded_file)
 
@@ -66,6 +71,19 @@ def analyze_audio_file(uploaded_file):
         raise ValueError("音声データが空です。")
 
     analyzed_duration = len(y) / sr
+
+    if analyzed_duration <= 0:
+        raise ValueError("音声の長さを取得できませんでした。")
+
+    if analyzed_duration > MAX_DURATION_SEC:
+        raise ValueError("分析できる長さは 0〜5分 です。5分以内の音声をアップロードしてください。")
+
+    y = trim_silence(y, top_db=25)
+
+    if len(y) == 0:
+        raise ValueError("静音を除くと有効な音声がありませんでした。")
+
+    trimmed_duration = len(y) / sr
 
     frame_length = 2048
     hop_length = 512
@@ -95,7 +113,7 @@ def analyze_audio_file(uploaded_file):
     valid_f0 = f0[~np.isnan(f0)]
 
     if len(valid_f0) == 0:
-        raise ValueError("音高を検出できませんでした。")
+        raise ValueError("音高を検出できませんでした。アカペラ音声か確認してください。")
 
     max_pitch_hz = float(np.max(valid_f0))
     mean_pitch_hz = float(np.mean(valid_f0))
@@ -108,13 +126,8 @@ def analyze_audio_file(uploaded_file):
 
     high_pitch_mask = (~np.isnan(f0)) & (f0 >= high_pitch_threshold_hz)
     high_pitch_frames = np.sum(high_pitch_mask)
-
     high_pitch_duration = high_pitch_frames * seconds_per_frame
-
-    if voiced_duration > 0:
-        high_pitch_ratio = high_pitch_duration / voiced_duration
-    else:
-        high_pitch_ratio = 0.0
+    high_pitch_ratio = high_pitch_duration / voiced_duration if voiced_duration > 0 else 0.0
 
     max_pitch_note = hz_to_note_name(max_pitch_hz)
     mean_pitch_note = hz_to_note_name(mean_pitch_hz)
@@ -130,6 +143,7 @@ def analyze_audio_file(uploaded_file):
     return {
         "sr": sr,
         "analyzed_duration": analyzed_duration,
+        "trimmed_duration": trimmed_duration,
         "rms": rms,
         "times_rms": times_rms,
         "f0": f0,
