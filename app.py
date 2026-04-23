@@ -8,8 +8,8 @@ st.title("Song Analysis MVP")
 st.write("アカペラのサビ区間を簡易解析します。")
 
 uploaded_file = st.file_uploader(
-    "音声ファイルをアップロードしてください(wavのみ)",
-    type=["wav"]
+    "音声ファイルをアップロードしてください(wav / m4a)",
+    type=["wav", "m4a"]
 )
 
 col1, col2 = st.columns(2)
@@ -28,7 +28,7 @@ if analyze_button:
     else:
         try:
             with st.spinner("解析中です..."):
-                result = analyze_audio_file(uploaded_file, start_sec, end_sec)
+                result = analyze_audio_file(uploaded_file)
 
             st.success("解析が完了しました。")
 
