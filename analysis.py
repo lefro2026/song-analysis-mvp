@@ -1,7 +1,9 @@
-import io
+import os
+import shutil
 import tempfile
 import numpy as np
 import librosa
+from pydub import AudioSegment
 
 from utils import hz_to_note_name, build_comment
 
@@ -24,47 +26,64 @@ def build_adaptive_pitch_ticks(valid_f0: np.ndarray):
     tick_midis = list(range(min_oct, max_oct + 1, 12))
     tick_notes = [librosa.midi_to_note(m) for m in tick_midis]
     tick_values = [librosa.midi_to_hz(m) for m in tick_midis]
+
     return tick_values, tick_notes
 
 
 def load_audio_from_uploaded_file(uploaded_file):
-    suffix = "." + uploaded_file.name.split(".")[-1].lower()
+    ext = uploaded_file.name.split(".")[-1].lower()
+    temp_dir = tempfile.mkdtemp()
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(uploaded_file.read())
-        tmp_path = tmp.name
+    input_path = os.path.join(temp_dir, f"input.{ext}")
+    output_path = os.path.join(temp_dir, "converted.wav")
 
-    y, sr = librosa.load(tmp_path, sr=None, mono=True)
-    return y, sr
+    try:
+        # アップロードファイルを保存
+        with open(input_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+
+        if ext == "m4a":
+            audio = AudioSegment.from_file(input_path, format="m4a")
+            audio = audio.set_channels(1)
+            audio.export(output_path, format="wav")
+            y, sr = librosa.load(output_path, sr=None, mono=True)
+        else:
+            y, sr = librosa.load(input_path, sr=None, mono=True)
+
+        return y, sr
+
+    finally:
+        try:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception:
+            pass
 
 
-def cut_audio_segment(y, sr, start_sec, end_sec):
-    start_sample = int(start_sec * sr)
-    end_sample = int(end_sec * sr)
-    return y[start_sample:end_sample]
-
-
-def analyze_audio_file(uploaded_file, start_sec: float, end_sec: float):
+def analyze_audio_file(uploaded_file):
     y, sr = load_audio_from_uploaded_file(uploaded_file)
-    y_cut = cut_audio_segment(y, sr, start_sec, end_sec)
 
-    if len(y_cut) == 0:
-        raise ValueError("指定区間の音声が空です。開始秒と終了秒を確認してください。")
+    if len(y) == 0:
+        raise ValueError("音声データが空です。")
 
-    analyzed_duration = len(y_cut) / sr
+    analyzed_duration = len(y) / sr
 
     frame_length = 2048
     hop_length = 512
 
     rms = librosa.feature.rms(
-        y=y_cut,
+        y=y,
         frame_length=frame_length,
         hop_length=hop_length
     )[0]
-    times_rms = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop_length)
+
+    times_rms = librosa.frames_to_time(
+        np.arange(len(rms)),
+        sr=sr,
+        hop_length=hop_length
+    )
 
     f0, voiced_flag, voiced_prob = librosa.pyin(
-        y_cut,
+        y,
         fmin=librosa.note_to_hz("C2"),
         fmax=librosa.note_to_hz("C6"),
         sr=sr,
@@ -76,7 +95,7 @@ def analyze_audio_file(uploaded_file, start_sec: float, end_sec: float):
     valid_f0 = f0[~np.isnan(f0)]
 
     if len(valid_f0) == 0:
-        raise ValueError("音高をうまく検出できませんでした。アカペラ音声か確認してください。")
+        raise ValueError("音高を検出できませんでした。")
 
     max_pitch_hz = float(np.max(valid_f0))
     mean_pitch_hz = float(np.mean(valid_f0))
@@ -89,8 +108,13 @@ def analyze_audio_file(uploaded_file, start_sec: float, end_sec: float):
 
     high_pitch_mask = (~np.isnan(f0)) & (f0 >= high_pitch_threshold_hz)
     high_pitch_frames = np.sum(high_pitch_mask)
+
     high_pitch_duration = high_pitch_frames * seconds_per_frame
-    high_pitch_ratio = high_pitch_duration / voiced_duration if voiced_duration > 0 else 0.0
+
+    if voiced_duration > 0:
+        high_pitch_ratio = high_pitch_duration / voiced_duration
+    else:
+        high_pitch_ratio = 0.0
 
     max_pitch_note = hz_to_note_name(max_pitch_hz)
     mean_pitch_note = hz_to_note_name(mean_pitch_hz)
