@@ -1,177 +1,420 @@
 import streamlit as st
-from analysis import analyze_audio_file
+from analysis import analyze_audio_file, get_key_profile
 from plotter import create_volume_plot, create_pitch_plot
 
-st.set_page_config(page_title="Song Analysis MVP", layout="centered")
+st.set_page_config(
+    page_title="Song Analysis MVP",
+    page_icon="icon.png",
+    layout="centered"
+)
 
-# ===== CSS =====
+if "is_analyzing" not in st.session_state:
+    st.session_state.is_analyzing = False
+
+if "run_analysis" not in st.session_state:
+    st.session_state.run_analysis = False
+
+if "analysis_result" not in st.session_state:
+    st.session_state.analysis_result = None
+
+if "analysis_error" not in st.session_state:
+    st.session_state.analysis_error = None
+
+
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+
+
 st.markdown("""
 <style>
-/* 全体の余白を少し整える */
 .block-container {
     padding-top: 2rem;
     padding-bottom: 3rem;
+    max-width: 900px;
 }
 
-/* 解析ボタンを目立たせる */
-div.stButton > button {
-    background: linear-gradient(90deg, #2563eb, #1d4ed8);
-    color: white;
-    font-weight: 700;
-    font-size: 1.1rem;
-    border: none;
-    border-radius: 12px;
-    padding: 0.85rem 1rem;
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
-    transition: all 0.2s ease-in-out;
+h1 {
+    font-size: 3rem !important;
+    font-weight: 800 !important;
 }
 
-div.stButton > button:hover {
-    background: linear-gradient(90deg, #1d4ed8, #1e40af);
-    transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35);
-}
-
-div.stButton > button:focus {
-    outline: none;
-    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
-}
-
-/* アップロード欄を少し強調 */
-section[data-testid="stFileUploader"] {
-    border: 1px solid rgba(100, 116, 139, 0.25);
-    border-radius: 14px;
-    padding: 0.5rem;
-    background: #fafafa;
-}
-
-/* 補助説明用のカード */
-.help-card {
-    background: #f8fafc;
-    border: 1px solid rgba(148, 163, 184, 0.25);
-    border-radius: 14px;
-    padding: 1rem 1rem 0.7rem 1rem;
-    margin-top: 0.5rem;
-    margin-bottom: 1rem;
-}
-
-.help-title {
-    font-size: 1rem;
-    font-weight: 700;
-    margin-bottom: 0.3rem;
-    color: #1e3a8a;
-}
-
-/* セクション見出しの余白 */
 .section-title {
-    margin-top: 1.2rem;
-    margin-bottom: 0.4rem;
-    font-weight: 700;
-    font-size: 1.1rem;
+    font-size: 1.55rem;
+    font-weight: 800;
+    margin-top: 1.4rem;
+    margin-bottom: 0.5rem;
+}
+
+.sub-text {
+    color: #64748b;
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+}
+
+@keyframes fadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animated-panel {
+    animation: fadeSlideIn 0.45s ease-out;
+}
+
+[data-testid="stFileUploader"] {
+    background: #fff8dc !important;
+    border: 3px dashed #f59e0b !important;
+    border-radius: 22px !important;
+    padding: 24px !important;
+    margin-top: 10px !important;
+    margin-bottom: 10px !important;
+}
+
+[data-testid="stFileUploader"] button {
+    background: linear-gradient(90deg, #f59e0b, #ea580c) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 12px !important;
+    font-weight: 800 !important;
+    padding: 12px 24px !important;
+    font-size: 18px !important;
+    box-shadow: 0 8px 18px rgba(245,158,11,0.28) !important;
+}
+
+.settings-guide {
+    background: #eef6ff;
+    border: 1px solid #93c5fd;
+    border-radius: 16px;
+    padding: 0.95rem 1rem;
+    margin-top: 1rem;
+    margin-bottom: 0.6rem;
+}
+
+div.stButton > button {
+    background: #cbd5e1 !important;
+    color: #475569 !important;
+    font-weight: 800 !important;
+    font-size: 1.35rem !important;
+    border: none !important;
+    border-radius: 18px !important;
+    padding: 1.15rem 1rem !important;
+    min-height: 72px !important;
+    box-shadow: none !important;
+}
+
+@keyframes shineMove {
+    0% { left: -80%; }
+    55% { left: 130%; }
+    100% { left: 130%; }
+}
+
+.result-card {
+    background: #fffdf5;
+    border: 1px solid #f3e6b0;
+    border-radius: 18px;
+    padding: 1.2rem;
+    margin-top: 1rem;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ===== Header =====
+
 st.title("Song Analysis MVP")
 st.write("アカペラ音声をアップロードすると、全区間を簡易解析できます。")
 st.info("使い方: 録音した wav / m4a をアップロードして「解析する」を押してください。")
-st.caption("対応形式: wav / m4a | 分析可能時間: 0〜5分 | アカペラ推奨")
+st.caption("対応形式: wav / m4a ｜ 分析可能時間: 0〜5分 ｜ アカペラ推奨")
 
-# ===== Upload area =====
-st.markdown('<div class="section-title">音声ファイルをアップロードしてください</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="section-title">① 音声ファイルをアップロード</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-text">まず、解析したい録音ファイルを追加してください。</div>', unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader(
-    label="",
+    "ここに音声ファイルを追加してください",
     type=["wav", "m4a"],
-    label_visibility="collapsed"
+    label_visibility="visible",
+    key=f"audio_uploader_{st.session_state.uploader_key}"
 )
 
-# ===== Main action =====
-analyze_button = st.button("解析する", use_container_width=True)
+is_file_uploaded = uploaded_file is not None
 
-# ===== Help area =====
-st.markdown(
-    """
-    <div class="help-card">
-        <div class="help-title">アップロード方法がわからない場合</div>
-        <div>iPhone / Android で録音した音声をアップロードする手順を確認できます。</div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+if is_file_uploaded:
+    st.success("音声ファイルが追加されました。")
+else:
+    with st.expander("アップロード方法がわからない場合"):
+        st.markdown("""
+**iPhone**  
+ボイスメモ → 共有 → ファイルに保存 → このアプリでアップロード
 
-with st.expander("iPhone / Android からアップロードする方法"):
-    st.markdown("""
-### iPhoneからアップロードする方法
-1. **ボイスメモ**で録音する  
-2. 録音を開いて**共有**を押す  
-3. **ファイルに保存**を選ぶ  
-4. このアプリでそのファイルをアップロードする  
-
-### Androidからアップロードする方法
-1. 端末の**録音アプリ**で録音する  
-2. 録音一覧から対象ファイルを開く  
-3. **共有**を押す  
-4. ファイルとして保存するか、このアプリにアップロードする  
-
-※ Androidは機種によって録音アプリ名が異なります  
-例: Pixel = Recorder、Galaxy = Voice Recorder
+**Android**  
+録音アプリ → 保存 / 共有 → このアプリでアップロード
 """)
 
-# ===== Analyze =====
+
+if is_file_uploaded:
+    st.markdown("""
+    <div class="animated-panel settings-guide">
+        <b>解析設定を変更できます（任意）</b><br>
+        よくわからない場合は、そのままでOKです。
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("解析設定を変更する", expanded=False):
+        key_mode = st.selectbox(
+            "歌うキーの傾向",
+            ["高め男性キー", "低め男性キー", "低め女性キー", "高め女性キー"],
+            index=0
+        )
+
+        profile = get_key_profile(key_mode)
+
+        st.caption(
+            f"高音しきい値: {profile['threshold_karaoke']} "
+            f"({profile['threshold_note']}, {profile['threshold_hz']:.2f}Hz)"
+        )
+
+        note_style = st.radio(
+            "音名の表示形式",
+            ["mid / hi 形式", "A4 / C5 形式"],
+            index=0,
+            horizontal=True
+        )
+else:
+    key_mode = "高め男性キー"
+    note_style = "mid / hi 形式"
+
+
+st.markdown('<div class="section-title">② 解析する</div>', unsafe_allow_html=True)
+
+if st.session_state.is_analyzing:
+    st.markdown('<div class="sub-text">解析中です。完了までお待ちください。</div>', unsafe_allow_html=True)
+
+elif is_file_uploaded:
+    st.markdown('<div class="sub-text">準備完了です。下のボタンを押すと解析を開始します。</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <style>
+    div.stButton > button {
+        position: relative !important;
+        overflow: hidden !important;
+        background: linear-gradient(90deg, #2563eb, #1d4ed8) !important;
+        color: white !important;
+        box-shadow: 0 10px 24px rgba(37,99,235,0.35) !important;
+    }
+
+    div.stButton > button::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -80%;
+        width: 55%;
+        height: 100%;
+        background: linear-gradient(
+            120deg,
+            transparent,
+            rgba(255,255,255,0.55),
+            transparent
+        );
+        animation: shineMove 2.2s infinite;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+else:
+    st.markdown('<div class="sub-text">音声ファイルを追加すると、解析できます。</div>', unsafe_allow_html=True)
+
+
+button_label = "解析中です..." if st.session_state.is_analyzing else "解析する"
+
+analyze_button = st.button(
+    button_label,
+    use_container_width=True,
+    disabled=(not is_file_uploaded) or st.session_state.is_analyzing
+)
+
 if analyze_button:
-    if uploaded_file is None:
-        st.error("音声ファイルをアップロードしてください。")
-    else:
-        try:
-            with st.spinner("解析中です..."):
-                result = analyze_audio_file(uploaded_file)
+    st.session_state.is_analyzing = True
+    st.session_state.run_analysis = True
+    st.session_state.analysis_result = None
+    st.session_state.analysis_error = None
+    st.rerun()
 
-            st.success("解析が完了しました。")
 
-            st.write("## 結果")
+if st.session_state.run_analysis and st.session_state.is_analyzing:
+    try:
+        st.info("解析中です。しばらくお待ちください。")
 
-            col1, col2 = st.columns(2)
-            col3, col4 = st.columns(2)
+        progress_bar = st.progress(0)
+        progress_text = st.empty()
 
-            with col1:
-                st.metric("最高音", result["max_pitch_note"])
-            with col2:
-                st.metric("平均音高", result["mean_pitch_note"])
-            with col3:
-                st.metric("高音維持時間", f'{result["high_pitch_duration"]:.2f} 秒')
-            with col4:
-                st.metric("高音割合", f'{result["high_pitch_ratio"] * 100:.1f}%')
+        def update_progress(percent, message):
+            progress_bar.progress(percent)
+            progress_text.write(message)
 
-            st.write("### この音声の傾向")
-            st.write(result["comment"])
+        result = analyze_audio_file(
+            uploaded_file=uploaded_file,
+            key_mode=key_mode,
+            note_style=note_style,
+            progress_callback=update_progress
+        )
 
-            st.write("### 音量の推移")
-            st.caption("録音中の音の強さの変化です。絶対的な声量評価ではなく、流れを見るための参考です。")
-            volume_fig = create_volume_plot(result["times_rms"], result["rms"])
-            st.pyplot(volume_fig)
+        st.session_state.analysis_result = result
+        st.session_state.analysis_error = None
 
-            st.write("### 音高の推移")
-            st.caption("時間ごとの音の高さの変化です。高い音がどこで出ているかを確認できます。")
-            pitch_fig = create_pitch_plot(
-                result["times_f0"],
-                result["f0"],
-                result["pitch_tick_values"],
-                result["pitch_tick_labels"],
-            )
-            st.pyplot(pitch_fig)
+    except Exception as e:
+        st.session_state.analysis_error = str(e)
+        st.session_state.analysis_result = None
 
-            with st.expander("詳細値を見る"):
-                st.write(f'サンプリング周波数: {result["sr"]} Hz')
-                st.write(f'分析前の長さ: {result["analyzed_duration"]:.2f} 秒')
-                st.write(f'静音除去後の長さ: {result["trimmed_duration"]:.2f} 秒')
-                st.write(f'最高音Hz: {result["max_pitch_hz"]:.2f}')
-                st.write(f'平均音高Hz: {result["mean_pitch_hz"]:.2f}')
-                st.write(
-                    f'高音しきい値: {result["high_pitch_threshold_note"]} '
-                    f'({result["high_pitch_threshold_hz"]:.2f} Hz)'
-                )
+    finally:
+        st.session_state.is_analyzing = False
+        st.session_state.run_analysis = False
 
-        except Exception:
-            st.error("解析に失敗しました。対応形式は wav / m4a、長さは5分以内か確認してください。")
+        # 解析完了後、アップロード欄をリセットする
+        st.session_state.uploader_key += 1
+
+        st.rerun()
+
+
+if st.session_state.analysis_error:
+    st.error("解析に失敗しました。")
+    st.caption(st.session_state.analysis_error)
+
+
+if st.session_state.analysis_result:
+    result = st.session_state.analysis_result
+
+    st.success("解析が完了しました。")
+
+    st.markdown("""
+    <style>
+    .result-title {
+        font-size: 2.2rem;
+        font-weight: 900;
+        margin-top: 2rem;
+        margin-bottom: 0.8rem;
+    }
+
+    .metric-label {
+        color: #64748b;
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+    }
+
+    .metric-value {
+        font-size: 2.2rem;
+        font-weight: 900;
+        color: #0f172a;
+        margin-bottom: 1rem;
+    }
+
+    .comment-box {
+        background: #f8fafc;
+        border-left: 5px solid #2563eb;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-top: 1rem;
+        font-size: 1rem;
+        line-height: 1.8;
+    }
+
+    .view-selector {
+        margin-top: 0.5rem;
+        margin-bottom: 1rem;
+    }
+                
+    .result-title {
+    text-align: center;
+    }
+
+    .metric-label,
+    .metric-value {
+        text-align: center;
+    }
+
+    .comment-box {
+        max-width: 760px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="result-title">結果</div>', unsafe_allow_html=True)
+
+    view_mode = st.radio(
+        "表示内容",
+        ["概要", "グラフ", "詳細"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    if view_mode == "概要":
+
+
+        col1, col2 = st.columns(2)
+        col3, col4 = st.columns(2)
+
+        with col1:
+            st.markdown('<div class="metric-label">最高音</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-value">{result["max_pitch_note"]}</div>', unsafe_allow_html=True)
+
+        with col2:
+            st.markdown('<div class="metric-label">平均音高</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-value">{result["mean_pitch_note"]}</div>', unsafe_allow_html=True)
+
+        with col3:
+            st.markdown('<div class="metric-label">高音維持時間</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-value">{result["high_pitch_duration"]:.2f} 秒</div>', unsafe_allow_html=True)
+
+        with col4:
+            st.markdown('<div class="metric-label">高音割合</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-value">{result["high_pitch_ratio"] * 100:.1f}%</div>', unsafe_allow_html=True)
+
+
+        st.markdown("### この音声の傾向")
+        st.markdown(
+            f'<div class="comment-box">{result["comment"]}</div>',
+            unsafe_allow_html=True
+        )
+
+    elif view_mode == "グラフ":
+        st.write("### 音量の推移")
+        st.caption("録音中の音の強さの変化です。絶対的な声量評価ではなく、流れを見る参考です。")
+
+        volume_fig = create_volume_plot(
+            result["times_rms"],
+            result["rms"]
+        )
+        st.plotly_chart(volume_fig, use_container_width=True)
+
+        st.write("### 音高の推移")
+        st.caption("高音しきい値以上は別色で表示されます。")
+
+        pitch_fig = create_pitch_plot(
+            result["times_f0"],
+            result["f0"],
+            result["pitch_tick_values"],
+            result["pitch_tick_labels"],
+            result["high_pitch_threshold_hz"]
+        )
+        st.plotly_chart(pitch_fig, use_container_width=True)
+
+    elif view_mode == "詳細":
+        st.write("### 詳細値")
+
+
+        st.write(f"サンプリング周波数: {result['sr']} Hz")
+        st.write(f"分析前の長さ: {result['analyzed_duration']:.2f} 秒")
+        st.write(f"静音除去後の長さ: {result['trimmed_duration']:.2f} 秒")
+        st.write(f"最高音Hz: {result['max_pitch_hz']:.2f}")
+        st.write(f"平均音高Hz: {result['mean_pitch_hz']:.2f}")
+        st.write(
+            f"高音しきい値: {result['high_pitch_threshold_display']} "
+            f"({result['high_pitch_threshold_hz']:.2f} Hz)"
+        )
+        st.write(f"選択モード: {result['key_mode']}")
