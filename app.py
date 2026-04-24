@@ -27,6 +27,49 @@ if "uploader_key" not in st.session_state:
 
 st.markdown("""
 <style>
+            
+
+/* ===== 通常(ライトモード) ===== */
+
+.metric-label {
+    color: #64748b;
+}
+
+.metric-value {
+    color: #0f172a;
+}
+
+.settings-guide {
+    background: #eef6ff;
+    color: #0f172a;
+    border: 1px solid #93c5fd;
+}
+
+/* ===== ダークモード時のみ変更 ===== */
+
+@media (prefers-color-scheme: dark) {
+
+
+    .settings-guide {
+        background: #0f172a !important;
+        color: #e2e8f0 !important;
+        border: 1px solid #3b82f6 !important;
+    }
+
+    .sub-text,
+    .stCaption,
+    p {
+        color: #cbd5e1 !important;
+    }
+
+    .comment-box {
+        background: #111827 !important;
+        color: #f8fafc !important;
+    }
+
+}
+            
+
 .block-container {
     padding-top: 2rem;
     padding-bottom: 3rem;
@@ -86,13 +129,25 @@ h1 {
     box-shadow: 0 8px 18px rgba(245,158,11,0.28) !important;
 }
 
+
+/* 通常ライトモード */
 .settings-guide {
     background: #eef6ff;
+    color: #0f172a;
     border: 1px solid #93c5fd;
     border-radius: 16px;
     padding: 0.95rem 1rem;
     margin-top: 1rem;
     margin-bottom: 0.6rem;
+}
+
+/* ダークモード時のみ変更 */
+@media (prefers-color-scheme: dark) {
+    .settings-guide {
+        background: #06163a !important;
+        color: #f8fafc !important;
+        border: 1px solid #2563eb !important;
+    }
 }
 
 div.stButton > button {
@@ -167,7 +222,8 @@ if is_file_uploaded:
         key_mode = st.selectbox(
             "歌うキーの傾向",
             ["高め男性キー", "低め男性キー", "低め女性キー", "高め女性キー"],
-            index=0
+            index=0,
+            disabled=st.session_state.is_analyzing
         )
 
         profile = get_key_profile(key_mode)
@@ -181,7 +237,8 @@ if is_file_uploaded:
             "音名の表示形式",
             ["mid / hi 形式", "A4 / C5 形式"],
             index=0,
-            horizontal=True
+            horizontal=True,
+            disabled=st.session_state.is_analyzing
         )
 else:
     key_mode = "高め男性キー"
@@ -290,66 +347,88 @@ if st.session_state.analysis_result:
     st.success("解析が完了しました。")
 
     st.markdown("""
-    <style>
+<style>
+
+/* =========================
+   結果エリア：ライトモード
+========================= */
+
+.result-title {
+    font-size: 2.2rem;
+    font-weight: 900;
+    margin-top: 2rem;
+    margin-bottom: 0.8rem;
+    text-align: center;
+    color: #0f172a;
+}
+
+.metric-label {
+    color: #64748b;
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+    text-align: center;
+}
+
+.metric-value {
+    font-size: 2.2rem;
+    font-weight: 900;
+    color: #0f172a;
+    margin-bottom: 1rem;
+    text-align: center;
+    text-shadow: none;
+}
+
+.comment-box {
+    background: #f8fafc;
+    color: #0f172a;
+    border-left: 5px solid #2563eb;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-top: 1rem;
+    font-size: 1rem;
+    line-height: 1.8;
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* =========================
+   結果エリア：ダークモード
+========================= */
+
+@media (prefers-color-scheme: dark) {
+
     .result-title {
-        font-size: 2.2rem;
-        font-weight: 900;
-        margin-top: 2rem;
-        margin-bottom: 0.8rem;
+        color: #f8fafc !important;
     }
 
     .metric-label {
-        color: #64748b;
-        font-size: 0.95rem;
-        font-weight: 700;
-        margin-bottom: 0.2rem;
+        color: #94a3b8 !important;
     }
 
     .metric-value {
-        font-size: 2.2rem;
-        font-weight: 900;
-        color: #0f172a;
-        margin-bottom: 1rem;
+        color: #f8fafc !important;
+        text-shadow: 0 0 18px rgba(59, 130, 246, 0.55);
     }
 
     .comment-box {
-        background: #f8fafc;
-        border-left: 5px solid #2563eb;
-        border-radius: 12px;
-        padding: 1rem;
-        margin-top: 1rem;
-        font-size: 1rem;
-        line-height: 1.8;
+        background: #111827 !important;
+        color: #f8fafc !important;
+        border-left: 5px solid #3b82f6 !important;
     }
-
-    .view-selector {
-        margin-top: 0.5rem;
-        margin-bottom: 1rem;
-    }
+}
                 
-    .result-title {
-    text-align: center;
-    }
 
-    .metric-label,
-    .metric-value {
-        text-align: center;
-    }
-
-    .comment-box {
-        max-width: 760px;
-        margin-left: auto;
-        margin-right: auto;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+</style>
+""", unsafe_allow_html=True)
 
     st.markdown('<div class="result-title">結果</div>', unsafe_allow_html=True)
 
-    view_mode = st.radio(
+    view_mode = st.segmented_control(
         "表示内容",
         ["概要", "グラフ", "詳細"],
-        horizontal=True,
+        default="概要",
         label_visibility="collapsed"
     )
 
@@ -390,7 +469,7 @@ if st.session_state.analysis_result:
             result["times_rms"],
             result["rms"]
         )
-        st.plotly_chart(volume_fig, use_container_width=True)
+        st.plotly_chart(volume_fig, use_container_width=True, theme=None)
 
         st.write("### 音高の推移")
         st.caption("高音しきい値以上は別色で表示されます。")
@@ -402,7 +481,7 @@ if st.session_state.analysis_result:
             result["pitch_tick_labels"],
             result["high_pitch_threshold_hz"]
         )
-        st.plotly_chart(pitch_fig, use_container_width=True)
+        st.plotly_chart(pitch_fig, use_container_width=True, theme=None)
 
     elif view_mode == "詳細":
         st.write("### 詳細値")
