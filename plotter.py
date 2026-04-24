@@ -17,15 +17,14 @@ def hz_to_note_name(freq):
 # 通常音域（青）
 NORMAL_POINT_COLOR = "#38bdf8"
 
-# 高音域（黄〜橙）
-HIGH_POINT_COLOR = "#eab308"
-HIGH_POINT_BORDER = "#ca0404"
+# 高音域
+HIGH_POINT_COLOR = "#facc15"
+HIGH_POINT_BORDER = "#fef3c7"
 
-# ホバー表示（ピンク）
-HOVER_BG_COLOR = "#EF0ADC"
-HOVER_BORDER_COLOR = "#ca0404"
-HOVER_TEXT_COLOR = "#ffffff"
-
+# ホバー表示
+HOVER_BG_COLOR = "#ffffff"
+HOVER_BORDER_COLOR = "#2563eb"
+HOVER_TEXT_COLOR = "#0f172a"
 
 def common_hoverlabel():
     return dict(

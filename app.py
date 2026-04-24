@@ -45,27 +45,6 @@ st.markdown("""
     border: 1px solid #93c5fd;
 }
 
-/* ===== ダークモード時のみ変更 ===== */
-
-@media (prefers-color-scheme: dark) {
-
-
-    .settings-guide {
-        background: #0f172a !important;
-        color: #e2e8f0 !important;
-        border: 1px solid #3b82f6 !important;
-    }
-
-    .sub-text,
-    .stCaption,
-    p {
-        color: #cbd5e1 !important;
-    }
-
-    .comment-box {
-        background: #111827 !important;
-        color: #f8fafc !important;
-    }
 
 }
             
@@ -141,14 +120,6 @@ h1 {
     margin-bottom: 0.6rem;
 }
 
-/* ダークモード時のみ変更 */
-@media (prefers-color-scheme: dark) {
-    .settings-guide {
-        background: #06163a !important;
-        color: #f8fafc !important;
-        border: 1px solid #2563eb !important;
-    }
-}
 
 div.stButton > button {
     background: #cbd5e1 !important;
@@ -393,31 +364,6 @@ if st.session_state.analysis_result:
     margin-right: auto;
 }
 
-/* =========================
-   結果エリア：ダークモード
-========================= */
-
-@media (prefers-color-scheme: dark) {
-
-    .result-title {
-        color: #f8fafc !important;
-    }
-
-    .metric-label {
-        color: #94a3b8 !important;
-    }
-
-    .metric-value {
-        color: #f8fafc !important;
-        text-shadow: 0 0 18px rgba(59, 130, 246, 0.55);
-    }
-
-    .comment-box {
-        background: #111827 !important;
-        color: #f8fafc !important;
-        border-left: 5px solid #3b82f6 !important;
-    }
-}
                 
 
 </style>
